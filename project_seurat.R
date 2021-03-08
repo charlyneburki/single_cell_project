@@ -65,5 +65,56 @@ head(Idents(pbmc), 5)
 pbmc <- RunUMAP(pbmc, dims = 1:10)
 DimPlot(pbmc, reduction = "umap")
 
+# Find all markers of 8 clusters
+for (i in 0:7){
+  cluster.markers <- FindMarkers(pbmc, ident.1 = i, min.pct = 0.25)
+  print(head(cluster.markers, n = 5))
+}
+
+# Find markers for every cluster compared to all remaining cells, report only the positive ones
+pbmc.markers <- FindAllMarkers(pbmc, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+topgenes = pbmc.markers %>% group_by(cluster) %>% slice_max(n = 3, order_by = avg_log2FC)
+topgenes$gene
+
+# Gene expression analysis by cluster
+FeaturePlot(pbmc, features = c(topgenes$gene[1:3]))
+FeaturePlot(pbmc, features = c(topgenes$gene[4:6]))
+FeaturePlot(pbmc, features = c(topgenes$gene[7:9]))
+FeaturePlot(pbmc, features = c(topgenes$gene[10:12]))
+FeaturePlot(pbmc, features = c(topgenes$gene[13:15]))
+FeaturePlot(pbmc, features = c(topgenes$gene[16:18]))
+FeaturePlot(pbmc, features = c(topgenes$gene[19:21]))
+FeaturePlot(pbmc, features = c(topgenes$gene[22:24]))
+
+# Heat maps 
+top10 <- pbmc.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
+DoHeatmap(pbmc, features = top10$gene) + NoLegend()
+
+# Assigning cell type identity to clusters
+new.cluster.ids <- c("Microglia", "Cholinergic neurons", "Mature oligodendrocytes", "Vascular endothelial cells", "Noradrenergic neurons", "Excitatory neurons, thalamus", 
+                     "Excitatory neurons, midbrain", "Schwann cells")
+names(new.cluster.ids) <- levels(pbmc)
+pbmc <- RenameIdents(pbmc, new.cluster.ids)
+DimPlot(pbmc, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
+
+# Violin plot with 3 cell types specific genes
+# Cluster 0
+VlnPlot(pbmc, features = c("C1qa", "Hexb", "Cst3"), slot = "counts", log = TRUE)
+# Cluster 1
+VlnPlot(pbmc, features = c("Neurod1", "Gm2694", "Adcy1"), slot = "counts", log = TRUE)
+# Cluster 2
+VlnPlot(pbmc, features = c("Cldn11", "Mog", "Plp1"), slot = "counts", log = TRUE)
+# Cluster 3
+VlnPlot(pbmc, features = c("Acta2", "Myl9", "Crip1"), slot = "counts", log = TRUE)
+# Cluster 4
+VlnPlot(pbmc, features = c("Npy", "Gal", "Prph"), slot = "counts", log = TRUE)
+# Cluster 5
+VlnPlot(pbmc, features = c("Nptxr", "Ntng1", "Rab3c"), slot = "counts", log = TRUE)
+# Cluster 6
+VlnPlot(pbmc, features = c("Nrgn", "6330403K07Rik", "Pcp4"), slot = "counts", log = TRUE)
+# Cluster 7
+VlnPlot(pbmc, features = c("Mpz", "Ncmap", "Pmp22"), slot = "counts", log = TRUE)
+
+
 #save
 saveRDS(pbmc, file = "../output/pca_mouse_10.rds")
