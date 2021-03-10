@@ -58,7 +58,7 @@ ElbowPlot(pbmc)
 
 #clustering the cells 
 pbmc <- FindNeighbors(pbmc, dims = 1:10)
-pbmc <- FindClusters(pbmc, resolution = 0.5)
+pbmc <- FindClusters(pbmc, resolution = 1.2)
 head(Idents(pbmc), 5)
 
 #run non-linear dim reduction
@@ -67,28 +67,48 @@ DimPlot(pbmc, reduction = "umap")
 
 # Find all markers of 8 clusters
 for (i in 0:7){
-  cluster.markers <- FindMarkers(pbmc, ident.1 = i, min.pct = 0.25)
+  cluster.markers <- FindMarkers(pbmc, ident.1 = i, min.pct = 0.1, test.use = "t")
   print(head(cluster.markers, n = 5))
 }
 
 # Find markers for every cluster compared to all remaining cells, report only the positive ones
 pbmc.markers <- FindAllMarkers(pbmc, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
-topgenes = pbmc.markers %>% group_by(cluster) %>% slice_max(n = 3, order_by = avg_log2FC)
+topgenes = pbmc.markers %>% group_by(cluster) %>% slice_max(n = 15, order_by = avg_log2FC)
 topgenes$gene
 
 # Gene expression analysis by cluster
-FeaturePlot(pbmc, features = c(topgenes$gene[1:3]))
-FeaturePlot(pbmc, features = c(topgenes$gene[4:6]))
-FeaturePlot(pbmc, features = c(topgenes$gene[7:9]))
-FeaturePlot(pbmc, features = c(topgenes$gene[10:12]))
-FeaturePlot(pbmc, features = c(topgenes$gene[13:15]))
-FeaturePlot(pbmc, features = c(topgenes$gene[16:18]))
-FeaturePlot(pbmc, features = c(topgenes$gene[19:21]))
-FeaturePlot(pbmc, features = c(topgenes$gene[22:24]))
+FeaturePlot(pbmc, features = c(topgenes$gene[0:5]))
+FeaturePlot(pbmc, features = c(topgenes$gene[15:20]))
+FeaturePlot(pbmc, features = c(topgenes$gene[30:35]))
+FeaturePlot(pbmc, features = c(topgenes$gene[45:50]))
+FeaturePlot(pbmc, features = c(topgenes$gene[60:65]))
+FeaturePlot(pbmc, features = c(topgenes$gene[75:80]))
+FeaturePlot(pbmc, features = c(topgenes$gene[90:95]))
+FeaturePlot(pbmc, features = c(topgenes$gene[105:110]))
 
 # Heat maps 
-top10 <- pbmc.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
+top15 <- pbmc.markers %>% group_by(cluster) %>% top_n(n = 15, wt = avg_log2FC)
 DoHeatmap(pbmc, features = top10$gene) + NoLegend()
+
+print(top15$gene)
+top15$gene
+
+message(top15$gene[181:195])
+message(top15$gene[76:90])
+
+for (j in seq(0,105,15)){
+  print('new cluster')
+  for (i in 0:6){
+    message(top15$gene[i+j+1])
+  }
+}
+
+for (j in seq(0,7,1)){
+  print('new cluster')
+  for (i in 0:15){
+    message(top15$gene[i+14*j])
+  }
+}
 
 # Assigning cell type identity to clusters
 new.cluster.ids <- c("Microglia", "Cholinergic neurons", "Mature oligodendrocytes", "Vascular endothelial cells", "Noradrenergic neurons", "Excitatory neurons, thalamus", 
@@ -114,6 +134,7 @@ VlnPlot(pbmc, features = c("Nptxr", "Ntng1", "Rab3c"), slot = "counts", log = TR
 VlnPlot(pbmc, features = c("Nrgn", "6330403K07Rik", "Pcp4"), slot = "counts", log = TRUE)
 # Cluster 7
 VlnPlot(pbmc, features = c("Mpz", "Ncmap", "Pmp22"), slot = "counts", log = TRUE)
+
 
 
 #save
