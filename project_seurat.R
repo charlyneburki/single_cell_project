@@ -18,9 +18,16 @@ VlnPlot(data.matrix, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), n
 head(data.matrix@meta.data, 5) 
 
 #feature scatter
+library(ggplot2)
+library(ggpubr)
 plot1 <- FeatureScatter(data.matrix, feature1 = "nCount_RNA", feature2 = "percent.mt")
 plot2 <- FeatureScatter(data.matrix, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 plot1 + plot2
+ggarrange(plot1,plot2, nrow=2)
+
+pbmc <- data.matrix
+#filter some cells out 
+pbmc <- subset(pbmc, subset = nFeature_RNA > 100 & nFeature_RNA < 4500 & percent.mt < 5)
 
 #Normalizing the data 
 pbmc <- NormalizeData(data.matrix)
@@ -34,7 +41,7 @@ top10 <- head(VariableFeatures(pbmc), 10)
 plot1 <- VariableFeaturePlot(pbmc)
 plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
 plot1 + plot2
-
+ggarrange(plot1,plot2,nrow = 2)
 #scaling data
 all.genes <- rownames(pbmc)
 pbmc <- ScaleData(pbmc, features = all.genes)
@@ -53,12 +60,12 @@ DimHeatmap(pbmc, dims = 1:15, cells = 500, balanced = TRUE)
 # computation time
 pbmc <- JackStraw(pbmc, num.replicate = 100)
 pbmc <- ScoreJackStraw(pbmc, dims = 1:20)
-JackStrawPlot(pbmc, dims = 1:15)
-ElbowPlot(pbmc)
-
+j <-JackStrawPlot(pbmc, dims = 1:15)
+e <- ElbowPlot(pbmc)
+ggarrange(j,e,nrow = 2)
 #clustering the cells 
 pbmc <- FindNeighbors(pbmc, dims = 1:10)
-pbmc <- FindClusters(pbmc, resolution = 1.2)
+pbmc <- FindClusters(pbmc, resolution = 0.5)
 head(Idents(pbmc), 5)
 
 #run non-linear dim reduction
@@ -88,7 +95,8 @@ FeaturePlot(pbmc, features = c(topgenes$gene[105:110]))
 
 # Heat maps 
 top15 <- pbmc.markers %>% group_by(cluster) %>% top_n(n = 15, wt = avg_log2FC)
-DoHeatmap(pbmc, features = top10$gene) + NoLegend()
+DoHeatmap(pbmc, features = top15$gene) + NoLegend()
+
 
 print(top15$gene)
 top15$gene
@@ -111,7 +119,7 @@ for (j in seq(0,7,1)){
 }
 
 # Assigning cell type identity to clusters
-new.cluster.ids <- c("Microglia", "Cholinergic neurons", "Mature oligodendrocytes", "Vascular endothelial cells", "Noradrenergic neurons", "Excitatory neurons, thalamus", 
+new.cluster.ids <- c("Microglia", "Granule neurons, cerebellum", "Mature oligodendrocytes", "Vascular smooth muscle cells, arterial", "Noradrenergic neurons",
                      "Excitatory neurons, midbrain", "Schwann cells")
 names(new.cluster.ids) <- levels(pbmc)
 pbmc <- RenameIdents(pbmc, new.cluster.ids)
@@ -139,3 +147,4 @@ VlnPlot(pbmc, features = c("Mpz", "Ncmap", "Pmp22"), slot = "counts", log = TRUE
 
 #save
 saveRDS(pbmc, file = "../output/pca_mouse_10.rds")
+
