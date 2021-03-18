@@ -1,150 +1,204 @@
 library(dplyr)
 library(Seurat)
 library(patchwork)
-
 library(readr)
+library(ggplot2)
+library(ggpubr)
 
-matrix.count <-read.csv('../data/MOUSE_BRAIN_DATASET_2_COUNTS.tsv', header=TRUE, sep='\t', row.names = 'X' ) # load count matrix 
-head(matrix.count[1:5]) #verify the look of the matrix
+# Load count matrix
+#add filepath to data location below
+data_location <- '../data/MOUSE_BRAIN_DATASET_2_COUNTS.tsv' 
+matrix.count <-read.csv(data_location, header=TRUE, sep='\t', row.names = 'X')
 
+# Initialize the Seurat object
 data.matrix <-CreateSeuratObject(counts = matrix.count, project = "mouse_2", min.cells = 3, min.features = 200)
 
-head(data.matrix)
+# Add percent mt
 data.matrix[["percent.mt"]] <- PercentageFeatureSet(data.matrix, pattern = "^mt-")
 
 # Visualize QC metrics as a violin plot
 VlnPlot(data.matrix, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
 
-head(data.matrix@meta.data, 5) 
-
-#feature scatter
-library(ggplot2)
-library(ggpubr)
+# Feature scatter
 plot1 <- FeatureScatter(data.matrix, feature1 = "nCount_RNA", feature2 = "percent.mt")
 plot2 <- FeatureScatter(data.matrix, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 plot1 + plot2
 ggarrange(plot1,plot2, nrow=2)
 
-pbmc <- data.matrix
-#filter some cells out 
-pbmc <- subset(pbmc, subset = nFeature_RNA > 100 & nFeature_RNA < 4500 & percent.mt < 5)
+# Select the data and remove unwanted cells 
+mouse2 <- subset(data.matrix, subset = nFeature_RNA > 100 & nFeature_RNA < 4500 & percent.mt < 5)
 
-#Normalizing the data 
-pbmc <- NormalizeData(data.matrix)
+#Normalize the data 
+mouse2 <- NormalizeData(data.matrix)
 
-pbmc <- FindVariableFeatures(pbmc, selection.method = "vst", nfeatures = 2000)
+# Find variable features
+mouse2 <- FindVariableFeatures(mouse2, selection.method = "vst", nfeatures = 2000)
 
 # Identify the 10 most highly variable genes
-top10 <- head(VariableFeatures(pbmc), 10)
+top10 <- head(VariableFeatures(mouse2), 10)
 
-# plot variable features with and without labels
-plot1 <- VariableFeaturePlot(pbmc)
+# Plot variable features with labels
+plot1 <- VariableFeaturePlot(mouse2)
 plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
-plot1 + plot2
-ggarrange(plot1,plot2,nrow = 2)
-#scaling data
-all.genes <- rownames(pbmc)
-pbmc <- ScaleData(pbmc, features = all.genes)
+ggarrange(plot2,nrow = 1)
 
-#peforming linear dim reduction
-pbmc <- RunPCA(pbmc, features = VariableFeatures(object = pbmc))
-VizDimLoadings(pbmc, dims = 1:2, reduction = "pca")
+# Scale the data
+all.genes <- rownames(mouse2)
+mouse2 <- ScaleData(mouse2, features = all.genes)
 
-DimPlot(pbmc, reduction = "pca")
+# Perform linear dim reduction
+mouse2 <- RunPCA(mouse2, features = VariableFeatures(object = mouse2))
 
-DimHeatmap(pbmc, dims = 1:15, cells = 500, balanced = TRUE)
+# Visualize PCA results in different ways
+VizDimLoadings(mouse2, dims = 1:2, reduction = "pca")
 
-#more plots
-# NOTE: This process can take a long time for big datasets, comment out for expediency. More
-# approximate techniques such as those implemented in ElbowPlot() can be used to reduce
-# computation time
-pbmc <- JackStraw(pbmc, num.replicate = 100)
-pbmc <- ScoreJackStraw(pbmc, dims = 1:20)
-j <-JackStrawPlot(pbmc, dims = 1:15)
-e <- ElbowPlot(pbmc)
-ggarrange(j,e,nrow = 2)
-#clustering the cells 
-pbmc <- FindNeighbors(pbmc, dims = 1:10)
-pbmc <- FindClusters(pbmc, resolution = 0.5)
-head(Idents(pbmc), 5)
+DimPlot(mouse2, reduction = "pca")
 
-#run non-linear dim reduction
-pbmc <- RunUMAP(pbmc, dims = 1:10)
-DimPlot(pbmc, reduction = "umap")
+DimHeatmap(mouse2, dims = 1:15, cells = 500, balanced = TRUE)
 
-# Find all markers of 8 clusters
+# More plots
+mouse2 <- JackStraw(mouse2, num.replicate = 100)
+mouse2 <- ScoreJackStraw(mouse2, dims = 1:20)
+plot1 <-JackStrawPlot(mouse2, dims = 1:15)
+plot2 <- ElbowPlot(mouse2)
+ggarrange(plot1, plot2, nrow = 2)
+
+# CLUSTER THE CELLS WITH A RESOLUTION OF 0.5
+mouse2_1 <- FindNeighbors(mouse2, dims = 1:10)
+mouse2_1 <- FindClusters(mouse2_1, resolution = 0.5)
+
+# Run non-linear dimensional reduction
+mouse2_1 <- RunUMAP(mouse2_1, dims = 1:10)
+DimPlot(mouse2_1, reduction = "umap")
+
+# FIND MARKER GENES WITH THE DEFAULT WILCOXON RANK TEST
 for (i in 0:7){
-  cluster.markers <- FindMarkers(pbmc, ident.1 = i, min.pct = 0.1, test.use = "t")
-  print(head(cluster.markers, n = 5))
+  cluster.markers_1 <- FindMarkers(mouse2_1, ident.1 = i, min.pct = 0.25, only.pos = TRUE, logfc.threshold = 0.25)
+  print('New cluster')
+  print(head(cluster.markers_1, n = 5))
 }
 
-# Find markers for every cluster compared to all remaining cells, report only the positive ones
-pbmc.markers <- FindAllMarkers(pbmc, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
-topgenes = pbmc.markers %>% group_by(cluster) %>% slice_max(n = 15, order_by = avg_log2FC)
-topgenes$gene
+# Find marker genes for each cluster compared to all remaining cells
+# With the default Wilcoxon Rank Sum test
+# Report only the positive ones
+mouse2.markers_1 <- FindAllMarkers(mouse2_1, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
 
-# Gene expression analysis by cluster
-FeaturePlot(pbmc, features = c(topgenes$gene[0:5]))
-FeaturePlot(pbmc, features = c(topgenes$gene[15:20]))
-FeaturePlot(pbmc, features = c(topgenes$gene[30:35]))
-FeaturePlot(pbmc, features = c(topgenes$gene[45:50]))
-FeaturePlot(pbmc, features = c(topgenes$gene[60:65]))
-FeaturePlot(pbmc, features = c(topgenes$gene[75:80]))
-FeaturePlot(pbmc, features = c(topgenes$gene[90:95]))
-FeaturePlot(pbmc, features = c(topgenes$gene[105:110]))
+topgenes <- mouse2.markers_1 %>% group_by(cluster) %>% slice_max(n = 5, order_by = avg_log2FC)
+top10_1 <- mouse2.markers_1 %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
+top15 <- mouse2.markers_1 %>% group_by(cluster) %>% top_n(n = 15, wt = avg_log2FC)
 
-# Heat maps 
-top15 <- pbmc.markers %>% group_by(cluster) %>% top_n(n = 15, wt = avg_log2FC)
-DoHeatmap(pbmc, features = top15$gene) + NoLegend()
+# Heat map of the top 10 genes
+DoHeatmap(mouse2_1, features = top10_1$gene) + NoLegend()
 
+# Visualize top 5 marker genes expression in two different ways
+VlnPlot(mouse2_1, features = c("C1qa", "Ctss", "P2ry12", "C1qb", "C1qc"))
+VlnPlot(mouse2_1, features = c("Neurod1", "Gm2694", "Cbln3", "Gabra6", "Cbln1"))
 
-print(top15$gene)
-top15$gene
+VlnPlot(mouse2_1, features = c("Cldn11", "Mog", "Apod", "Mag", "Ugt8a"))
+VlnPlot(mouse2_1, features = c("Acta2", "Tagln", "Myh11", "Tpm2", "Igfbp7"))
+VlnPlot(mouse2_1, features = c("Npy", "Gal", "Slc6a2", "Ntrk1", "Tspan8"))
+VlnPlot(mouse2_1, features = c("Slc17a6", "Necab1", "Tcf7l2", "Slc1a2", "Cit"))
+VlnPlot(mouse2_1, features = c("Meis2", "Nrgn", "Ly6h", "Tcf7l2", "Hap1"))
+VlnPlot(mouse2_1, features = c("Mpz", "Prx", "Cldn19", "Dhh", "Egfl8"))
 
-message(top15$gene[181:195])
-message(top15$gene[76:90])
+FeaturePlot(mouse2_1, features = c(topgenes$gene[0:5]))
+FeaturePlot(mouse2_1, features = c(topgenes$gene[15:20]))
+FeaturePlot(mouse2_1, features = c(topgenes$gene[30:35]))
+FeaturePlot(mouse2_1, features = c(topgenes$gene[45:50]))
+FeaturePlot(mouse2_1, features = c(topgenes$gene[60:65]))
+FeaturePlot(mouse2_1, features = c(topgenes$gene[75:80]))
+FeaturePlot(mouse2_1, features = c(topgenes$gene[90:95]))
+FeaturePlot(mouse2_1, features = c(topgenes$gene[105:110]))
 
-for (j in seq(0,105,15)){
-  print('new cluster')
-  for (i in 0:6){
-    message(top15$gene[i+j+1])
-  }
-}
-
-for (j in seq(0,7,1)){
-  print('new cluster')
-  for (i in 0:15){
-    message(top15$gene[i+14*j])
-  }
+# FIND MARKER GENES WITH THE STUDENT T TEST --> leads to same results
+for (i in 0:7){
+  cluster.markers_2 <- FindMarkers(mouse2_1, ident.1 = i, min.pct = 0.1, test.use = "t", only.pos = TRUE)
+  print('New cluster')
+  print(head(cluster.markers_2, n = 5))
 }
 
 # Assigning cell type identity to clusters
-new.cluster.ids <- c("Microglia", "Granule neurons, cerebellum", "Mature oligodendrocytes", "Vascular smooth muscle cells, arterial", "Noradrenergic neurons",
+new.cluster.ids <- c("Microglia", "Granule neurons, cerebellum", 
+                     "Mature oligodendrocytes", "Vascular smooth muscle cells, arterial",
+                     "Noradrenergic neurons", "Excitatory neurons,thalamus/hypothalamus",
                      "Excitatory neurons, midbrain", "Schwann cells")
-names(new.cluster.ids) <- levels(pbmc)
-pbmc <- RenameIdents(pbmc, new.cluster.ids)
-DimPlot(pbmc, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
 
-# Violin plot with 3 cell types specific genes
-# Cluster 0
-VlnPlot(pbmc, features = c("C1qa", "Hexb", "Cst3"), slot = "counts", log = TRUE)
-# Cluster 1
-VlnPlot(pbmc, features = c("Neurod1", "Gm2694", "Adcy1"), slot = "counts", log = TRUE)
-# Cluster 2
-VlnPlot(pbmc, features = c("Cldn11", "Mog", "Plp1"), slot = "counts", log = TRUE)
-# Cluster 3
-VlnPlot(pbmc, features = c("Acta2", "Myl9", "Crip1"), slot = "counts", log = TRUE)
-# Cluster 4
-VlnPlot(pbmc, features = c("Npy", "Gal", "Prph"), slot = "counts", log = TRUE)
-# Cluster 5
-VlnPlot(pbmc, features = c("Nptxr", "Ntng1", "Rab3c"), slot = "counts", log = TRUE)
-# Cluster 6
-VlnPlot(pbmc, features = c("Nrgn", "6330403K07Rik", "Pcp4"), slot = "counts", log = TRUE)
-# Cluster 7
-VlnPlot(pbmc, features = c("Mpz", "Ncmap", "Pmp22"), slot = "counts", log = TRUE)
+names(new.cluster.ids) <- levels(mouse2_1)
+mouse2_1 <- RenameIdents(mouse2_1, new.cluster.ids)
+DimPlot(mouse2_1, reduction = "umap", label = TRUE, pt.size = 0.5, repel= TRUE) + NoLegend()
+
+# CLUSTER THE CELLS WITH A RESOLUTION OF 1.2
+mouse2_2 <- FindNeighbors(mouse2, dims = 1:10)
+mouse2_2 <- FindClusters(mouse2_2, resolution = 1.2)
+
+# Run non-linear dimensional reduction
+mouse2_2 <- RunUMAP(mouse2_2, dims = 1:10)
+DimPlot(mouse2_2, reduction = "umap")
+
+# FIND MARKER GENES WITH THE DEFAULT WILCOXON RANK TEST
+for (i in 0:13){
+  cluster.markers_3 <- FindMarkers(mouse2_2, ident.1 = i, min.pct = 0.25)
+  print('New cluster')
+  print(head(cluster.markers_3, n = 5))
+}
+
+# Find marker genes for each cluster compared to all remaining cells
+# With the default Wilcoxon Rank Sum test
+# Report only the positive ones
+mouse2.markers_2 <- FindAllMarkers(mouse2_2, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+top10_2 <- mouse2.markers_2 %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
+
+# Heat map of the top 10 genes
+DoHeatmap(mouse2_2, features = top10_2$gene) + NoLegend()
 
 
+##creating the boxplots for the dataset infos
+## Info dataset
+# Number of cells in the initial dataset
+length(data.matrix$orig.ident)
 
-#save
-saveRDS(pbmc, file = "../output/pca_mouse_10.rds")
+# Number of cells after quality filtering
+mouse2_1 <- subset(mouse2_1, subset = nFeature_RNA > 100 & nFeature_RNA < 4500 & percent.mt < 5)
+length(mouse2_1$orig.ident)
+
+# Number of genes in the dataset
+data.matrix <-CreateSeuratObject(counts = matrix.count, project = "mouse_2", min.cells = 3, min.features = 200)
+# Read information in...
+data.matrix
+
+# Mean number of genes expressed per cell
+mean(data.matrix@meta.data$nFeature_RNA)
+
+# To get how many cells per cluster
+summary(mouse2_1$seurat_clusters)
+
+# To get how many genes are expressed in each cluster in mean
+mean_nb_genes_cluster <- c()
+for (i in 0:7){
+  mean_nb_genes_cluster <- c(mean_nb_genes_cluster, round(mean(mouse2_1$nFeature_RNA[mouse2_1$seurat_clusters==i])))
+  print(round(mean(mouse2_1$nFeature_RNA[mouse2_1$seurat_clusters==i])))
+}
+
+
+# Create barchart with plotly
+library(plotly)
+fig <- plot_ly(x = c("0","1","2","3","4","5","6","7"), y = mean_nb_genes_cluster, type = "bar", text = mean_nb_genes_cluster, textposition = 'auto', name = "Mean number of genes expressed per cluster")                                 
+fig %>% layout(title = "Genes expressed per cluster",
+               xaxis = list(title = "Cluster"),
+               yaxis = list(title = "Number of genes"))
+
+# Boxplot
+library(ggplot2)
+x = mouse2_1$seurat_clusters
+y =mouse2_1$nFeature_RNA
+df <- tibble(x,y)
+p = ggplot(df, aes(x = x, y = mouse2_1$nFeature_RNA)) + geom_jitter(shape=16, position=position_jitter(0.3), alpha=0.4) +
+  geom_boxplot(outlier.shape = NA, varwidth=TRUE, color="blue")+
+  scale_fill_brewer(palette="RdBu") + 
+  stat_summary(fun=mean, geom="point", shape=20, size=3, color="red")+
+  stat_summary(fun=mean, geom="text", size=3, color="red", show.legend = FALSE, 
+               vjust=-0.2,hjust=1.5, aes( label=round(..y.., digits=1)))+
+  theme_minimal() + labs(title="Distribution of expressed genes number per cluster",x="Cluster", y = "Expressed genes")
+p
 
